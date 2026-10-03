@@ -43,6 +43,8 @@ The MySQL hosted Docker build received HTTP403 while the official Maven Wrapper 
 
 ## Outstanding release gates
 
+A subsequent collecting prerequisite phase (`springboot-final-stage-1ye3Aq`) exposed concurrent Compose exporters app/migrate/worker/seeder targeting the same shared image tag. Both providers failed before API scenarios; cleanup passed. Only app now declares the build, while the three native process modes reuse its image. Getting-started commands explicitly build app before startup. Full build phase `spring-macos-full-build-NQ9gOA` passed five tasks with tests disabled. The corrected collecting phase `springboot-final-stage-68la8e` passed six affected scenarios per provider (12 total), including slow-client timeout/recovery, outbox fencing, two-worker retry/renewal, graceful shutdown, shared replica quota and SMTP TLS/hostname verification. All owned resources were removed and absence verified. Production Java code is unchanged; the final hosted matrix remains required.
+
 - Complete clean final snapshot/package checks and full GitHub consumer/Compose/macOS matrix.
 - Verify corrected Spring source CI, update the root source pointer/snapshot, and observe the complete corrected shared matrix. Spring and affected Express source commits precede root pointer updates; no force push is used.
 

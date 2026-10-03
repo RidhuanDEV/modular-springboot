@@ -16,7 +16,8 @@ java -jar target/app.jar --app.mode=email-worker
 Initialize refuses existing .env and performs no DB operations. For MySQL add `--db.provider=mysql`. Process/CLI env overrides local dotenv; quoted values use dotenv-java. Inspect the ignored .env and create the selected database before migrate. HTTP/worker never migrate or seed automatically. Repeat seed preserves an existing admin password.
 
 ```sh
-docker compose up --build -d --wait
+docker compose build app
+docker compose up -d --wait
 docker compose --profile seed run --rm seeder
 ```
 Use `-f compose.mysql.yaml` and the MySQL env sample for MySQL. Migration failure prevents HTTP/worker startup. Optional profiles: redis, s3, telemetry. Never use sample credentials in production.

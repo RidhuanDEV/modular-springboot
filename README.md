@@ -5,7 +5,7 @@ Java 25 LTS, Spring Boot 4.1.1 and Spring MVC. PostgreSQL (default) or MySQL 8.4
 Use a Java 25 JDK. No global Maven required. Windows uses `mvnw.cmd`; Linux/macOS `./mvnw`.
 ```powershell
 .\mvnw.cmd -B -DskipTests dependency:go-offline
-.\mvnw.cmd -B -Dmaven.test.skip=true package
+.\mvnw.cmd -B "-Dmaven.test.skip=true" package
 java -jar target/app.jar --app.mode=initialize
 java -jar target/app.jar --app.mode=migrate
 java -jar target/app.jar --app.mode=seed

@@ -1,5 +1,5 @@
 # Implementation verification
-Updated 2026-10-03. Implementation, full builds and final local verification pass. Source/root commits, clean release provenance and observed CI remain pending. No npm version bump or publication is authorized.
+Updated 2026-10-03. Implementation, full builds and final local verification pass; source implementation is pushed to main. Final shared release provenance and root CI evidence are maintained in the [root verification report](https://github.com/RidhuanDEV/backend-modular/blob/main/docs/SPRING-BOOT-JAVA-VERIFICATION.md). No npm version bump or publication is authorized.
 
 ## Completed evidence
 
@@ -19,6 +19,7 @@ Updated 2026-10-03. Implementation, full builds and final local verification pas
 | Final affected SSE/provider and runtime-selection gates | Four SSE cases PASS (cancel and slow-client per provider), plus five invalid runtime-selection cases PASS; `springboot-final-stage-dxIBdc`. Interrupted incorrect filter attempt is FAILED (`springboot-final-stage-kd49MH`), with five owned containers/two volumes/one network/one image removed and absence verified. |
 | Final package, selection, runner and history checks | Four gates PASS, `springboot-final-stage-DFw1p5`; all14 generated combinations, checksums/secret exclusion, npm exec/create, invalid input and unchanged historical migrations. A stale Express documentation checksum failed the preceding stage; regenerating all snapshots resolved it without changing application code. Docker ownership-isolation runner separately passes4/4 with no skipped case. |
 | Complete unchanged SSE comparison | Five cases PASS, `sse-mini-stage-XjWnVW`: Windows fetch abort/TCP reset, Linux curl close/fetch abort/TCP reset. Each retains16 admitted,17th503,cancel-all,recovery200. Owned fixture cleanup verified. |
+| Initial source CI and affected build correction | Initial run37106845619 collected the same PowerShell argument-splitting build failure on both OS; both dependency/license audits passed. Quoting the complete Maven property fixes the affected local build (`spring-ci-property-build-cf7bc0049da14177b19927e14b3a59fe.log`). Whole corrected source CI is verified before final root release evidence. |
 
 ## Resolved failures and retained diagnostic attempts
 

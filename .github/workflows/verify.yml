@@ -22,7 +22,7 @@ jobs:
       - name: Full build without tests
         shell: pwsh
         run: |
-          if ($IsWindows) { ./mvnw.cmd -B -Dmaven.test.skip=true package } else { ./mvnw -B -Dmaven.test.skip=true package }
+          if ($IsWindows) { ./mvnw.cmd -B "-Dmaven.test.skip=true" package } else { ./mvnw -B "-Dmaven.test.skip=true" package }
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Final collecting stage
         shell: pwsh

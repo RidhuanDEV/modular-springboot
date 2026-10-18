@@ -108,12 +108,13 @@ class SystemsTest {
         AuthDto.Tokens
             original = auth.login(new AuthDto.Login(admin.email, "fixture-admin-password")),
             current = original;
-        for (int month = 0; month < 6; month++) {
+        // 3 x 29 days stays inside the 90-day absolute session lifetime.
+        for (int month = 0; month < 3; month++) {
           clock.advance(29 * 86400L);
           current = auth.refresh(new AuthDto.Refresh(current.refreshToken()));
         }
         assertEquals(1, db.count("SELECT COUNT(*) FROM refresh_families"));
-        assertTrue(db.count("SELECT COUNT(*) FROM refresh_tokens") > 5);
+        assertEquals(4, db.count("SELECT COUNT(*) FROM refresh_tokens"));
         AuthDto.Tokens latest = current;
         assertThrows(
             RuntimeException.class,
@@ -297,12 +298,128 @@ class SystemsTest {
         assertEquals(0, db.count("SELECT COUNT(*) FROM activity_logs WHERE module='fixture'"));
         assertEquals(1, db.count("SELECT COUNT(*) FROM email_jobs WHERE status='PENDING'"));
         assertEquals(1, db.count("SELECT COUNT(*) FROM notifications"));
+        systemPrimitivesLastRootSessionsAndFileOwnership(context, admin.id);
       }
     } finally {
       try (var files = java.nio.file.Files.walk(uploads)) {
         for (var path : files.sorted(java.util.Comparator.reverseOrder()).toList())
           java.nio.file.Files.deleteIfExists(path);
       }
+    }
+  }
+
+  private static void actAs(UUID user) {
+    org.springframework.security.core.context.SecurityContextHolder.getContext()
+        .setAuthentication(
+            new org.springframework.security.oauth2.server.resource.authentication
+                .JwtAuthenticationToken(
+                org.springframework.security.oauth2.jwt.Jwt.withTokenValue("fixture")
+                    .header("alg", "none")
+                    .subject(user.toString())
+                    .build()));
+  }
+
+  private static int status(org.junit.jupiter.api.function.Executable call) {
+    return assertThrows(com.example.backend.platform.http.ApiException.class, call).status();
+  }
+
+  private static void systemPrimitivesLastRootSessionsAndFileOwnership(
+      org.springframework.context.ConfigurableApplicationContext context, UUID admin)
+      throws Exception {
+    var permissions = context.getBean(com.example.backend.permissions.PermissionService.class);
+    var permissionRows =
+        context.getBean(com.example.backend.permissions.PermissionRepository.class);
+    var roles = context.getBean(com.example.backend.roles.RoleService.class);
+    var roleRows = context.getBean(com.example.backend.roles.RoleRepository.class);
+    var users = context.getBean(com.example.backend.users.UserService.class);
+    var auth = context.getBean(AuthService.class);
+    var uploads = context.getBean(com.example.backend.uploads.UploadService.class);
+    var stored = context.getBean(com.example.backend.uploads.UploadPersistence.class);
+    var clock = context.getBean(MutableClock.class);
+    try {
+      actAs(admin);
+      UUID system = permissionRows.findByName("manage_users").orElseThrow().id;
+      UUID uploadsPermission = permissionRows.findByName("manage_uploads").orElseThrow().id;
+      // System permissions and roles are immutable and their names reserved.
+      assertEquals(
+          403,
+          status(
+              () ->
+                  permissions.update(
+                      system, new com.example.backend.permissions.PermissionDto.Update("x"))));
+      assertEquals(403, status(() -> permissions.delete(system)));
+      UUID custom =
+          permissions
+              .create(new com.example.backend.permissions.PermissionDto.Create("custom_access"))
+              .id();
+      // RBAC only: a new permission is granted to every role managing permissions.
+      assertEquals(
+          1,
+          context
+              .getBean(Db.class)
+              .count(
+                  "SELECT COUNT(*) FROM role_permissions rp JOIN roles r ON r.id=rp.role_id"
+                      + " WHERE r.name='ADMIN' AND rp.permission_id=?",
+                  custom));
+      assertEquals(
+          403,
+          status(
+              () ->
+                  permissions.update(
+                      custom,
+                      new com.example.backend.permissions.PermissionDto.Update("manage_users"))));
+      assertDoesNotThrow(
+          () ->
+              permissions.update(
+                  custom,
+                  new com.example.backend.permissions.PermissionDto.Update("custom_renamed")));
+      UUID userRole = roleRows.findByName("USER").orElseThrow().id;
+      UUID adminRole = roleRows.findByName("ADMIN").orElseThrow().id;
+      assertEquals(
+          403,
+          status(() -> roles.update(userRole, new com.example.backend.roles.RoleDto.Update("x"))));
+      assertEquals(403, status(() -> roles.delete(userRole)));
+      assertEquals(
+          403, status(() -> roles.create(new com.example.backend.roles.RoleDto.Create("admin"))));
+      // The root role must keep every system permission.
+      assertEquals(
+          403,
+          status(
+              () ->
+                  roles.assign(
+                      adminRole, new com.example.backend.roles.RoleDto.Assign(List.of(custom)))));
+      UUID uploader = roles.create(new com.example.backend.roles.RoleDto.Create("uploader")).id();
+      roles.assign(
+          uploader, new com.example.backend.roles.RoleDto.Assign(List.of(uploadsPermission)));
+      // A role change revokes every refresh session of that user.
+      UUID member =
+          auth.register(new AuthDto.Register("uploader@example.com", "member-password")).id();
+      var tokens = auth.login(new AuthDto.Login("uploader@example.com", "member-password"));
+      users.update(member, new com.example.backend.users.UserDto.Update(null, uploader));
+      assertThrows(
+          RuntimeException.class, () -> auth.refresh(new AuthDto.Refresh(tokens.refreshToken())));
+      // Files are readable by their uploader and root users only.
+      UUID file = UUID.randomUUID();
+      stored.insert(
+          new com.example.backend.uploads.UploadDto(
+              file, "private.pdf", "application/pdf", 1, clock.instant()),
+          admin);
+      actAs(member);
+      assertEquals(404, status(() -> uploads.get(file, member)));
+      assertEquals(
+          404,
+          status(() -> uploads.download(file, member, java.io.OutputStream.nullOutputStream())));
+      actAs(admin);
+      assertEquals(file, uploads.get(file, admin).id());
+      // The only holder of the system permissions cannot be demoted.
+      assertEquals(
+          403,
+          status(
+              () ->
+                  users.update(
+                      admin, new com.example.backend.users.UserDto.Update(null, userRole))));
+    } finally {
+      org.springframework.security.core.context.SecurityContextHolder.clearContext();
     }
   }
 }

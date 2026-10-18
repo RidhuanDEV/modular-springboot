@@ -11,6 +11,8 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 @RestControllerAdvice
 public class ErrorAdvice {
+  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ErrorAdvice.class);
+
   @ExceptionHandler(ApiException.class)
   ResponseEntity<Api.Failure> domain(ApiException e) {
     return ResponseEntity.status(e.status())
@@ -34,7 +36,8 @@ public class ErrorAdvice {
   }
 
   @ExceptionHandler(DataAccessException.class)
-  ResponseEntity<Api.Failure> unavailable() {
+  ResponseEntity<Api.Failure> unavailable(DataAccessException e) {
+    log.error("database_failure type={}", e.getClass().getSimpleName());
     return ResponseEntity.status(503).body(Api.Failure.of("Service unavailable"));
   }
 
@@ -97,8 +100,7 @@ public class ErrorAdvice {
 
   @ExceptionHandler(Exception.class)
   ResponseEntity<Api.Failure> internal(Exception e) {
-    org.slf4j.LoggerFactory.getLogger(getClass())
-        .error("request_failure type={}", e.getClass().getSimpleName());
+    log.error("request_failure type={}", e.getClass().getSimpleName());
     return ResponseEntity.internalServerError().body(Api.Failure.of("Internal Server Error"));
   }
 }

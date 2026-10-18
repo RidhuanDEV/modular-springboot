@@ -19,8 +19,8 @@ public class Access {
   public static final String DEFAULT_ROLE = "USER";
 
   /**
-   * Code depends on these by name (registration, root exemption, route permissions), so they cannot
-   * be renamed, deleted or recreated; renaming a permission would mint access.
+   * Code depends on these by name (registration, upload ownership, route permissions), so they
+   * cannot be renamed, deleted or recreated; renaming a permission would mint access.
    */
   public static final Set<String> SYSTEM_ROLES = Set.of(ROOT_ROLE, DEFAULT_ROLE);
 

@@ -37,7 +37,8 @@ public class ErrorAdvice {
 
   @ExceptionHandler(DataAccessException.class)
   ResponseEntity<Api.Failure> unavailable(DataAccessException e) {
-    log.error("database_failure type={}", e.getClass().getSimpleName());
+    // The full exception stays in server logs; clients get a generic 503.
+    log.error("database_failure", e);
     return ResponseEntity.status(503).body(Api.Failure.of("Service unavailable"));
   }
 
@@ -100,7 +101,7 @@ public class ErrorAdvice {
 
   @ExceptionHandler(Exception.class)
   ResponseEntity<Api.Failure> internal(Exception e) {
-    log.error("request_failure type={}", e.getClass().getSimpleName());
+    log.error("request_failure", e);
     return ResponseEntity.internalServerError().body(Api.Failure.of("Internal Server Error"));
   }
 }

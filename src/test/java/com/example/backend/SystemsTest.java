@@ -97,6 +97,30 @@ class SystemsTest {
         seed.seed();
         var users = context.getBean(UserRepository.class);
         var admin = users.findByEmail("admin@example.com").orElseThrow();
+        // A permission created after seeding reaches every permission-managing role (pure RBAC).
+        var access = context.getBean(com.example.backend.platform.security.Access.class);
+        var fixtureDb = context.getBean(Db.class);
+        UUID invoices = UUID.randomUUID(), billing = UUID.randomUUID();
+        fixtureDb.update(
+            "INSERT INTO permissions(id,name,created_at,updated_at) VALUES(?,?,?,?)",
+            invoices,
+            "manage_invoices",
+            java.time.Instant.now(),
+            java.time.Instant.now());
+        fixtureDb.update(
+            "INSERT INTO roles(id,name,created_at,updated_at) VALUES(?,?,?,?)",
+            billing,
+            "BILLING",
+            java.time.Instant.now(),
+            java.time.Instant.now());
+        fixtureDb.update(
+            "INSERT INTO role_permissions(role_id,permission_id) VALUES(?,?)", billing, invoices);
+        assertThrows(
+            com.example.backend.platform.http.ApiException.class,
+            () -> access.grant(admin.id, List.of(invoices)));
+        access.grantToPermissionManagers(invoices);
+        assertDoesNotThrow(() -> access.grant(admin.id, List.of(invoices)));
+        assertDoesNotThrow(() -> access.within(admin.id, billing));
         String passwordHash = admin.password;
         seed.seed();
         assertEquals(passwordHash, users.findByEmail(admin.email).orElseThrow().password);
@@ -108,11 +132,15 @@ class SystemsTest {
         AuthDto.Tokens
             original = auth.login(new AuthDto.Login(admin.email, "fixture-admin-password")),
             current = original;
-        // 3 x 29 days stays inside the 90-day absolute session lifetime.
+        // Rotations inside the 30-day idle window succeed until the 90-day absolute cap.
         for (int month = 0; month < 3; month++) {
           clock.advance(29 * 86400L);
           current = auth.refresh(new AuthDto.Refresh(current.refreshToken()));
         }
+        clock.advance(29 * 86400L);
+        AuthDto.Tokens capped = current;
+        assertThrows(
+            RuntimeException.class, () -> auth.refresh(new AuthDto.Refresh(capped.refreshToken())));
         assertEquals(1, db.count("SELECT COUNT(*) FROM refresh_families"));
         assertEquals(4, db.count("SELECT COUNT(*) FROM refresh_tokens"));
         AuthDto.Tokens latest = current;
@@ -151,7 +179,12 @@ class SystemsTest {
         } finally {
           pool.shutdownNow();
         }
-        assertEquals(0, db.count("SELECT COUNT(*) FROM refresh_families WHERE revoked_at IS NULL"));
+        // The capped family is expired rather than revoked; none may remain usable.
+        assertEquals(
+            0,
+            db.count(
+                "SELECT COUNT(*) FROM refresh_families WHERE revoked_at IS NULL AND expires_at > ?",
+                clock.instant()));
         var note =
             notifications.create(
                 new NotificationDto.Create(admin.id, "worker", "immutable", false), admin.id);
@@ -381,7 +414,7 @@ class SystemsTest {
       assertEquals(403, status(() -> roles.delete(userRole)));
       assertEquals(
           403, status(() -> roles.create(new com.example.backend.roles.RoleDto.Create("admin"))));
-      // The root role must keep every system permission.
+      // System permissions must keep an active holder.
       assertEquals(
           403,
           status(
@@ -398,7 +431,7 @@ class SystemsTest {
       users.update(member, new com.example.backend.users.UserDto.Update(null, uploader));
       assertThrows(
           RuntimeException.class, () -> auth.refresh(new AuthDto.Refresh(tokens.refreshToken())));
-      // Files are readable by their uploader and root users only.
+      // Files are readable by their uploader and admin users only.
       UUID file = UUID.randomUUID();
       stored.insert(
           new com.example.backend.uploads.UploadDto(
